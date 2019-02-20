@@ -1,146 +1,162 @@
-# Binary heap (non-mutable)
+# This contains code that was formerly a part of Julia. License is MIT: http://julialang.org/license
+# Binary Heaps (using Flat Vectors)
 
-#################################################
-#
-#   core implementation
-#
-#################################################
+import Base.Order: Forward, Reverse, Ordering, lt
 
-function _heap_bubble_up!(comp::Comp, valtree::Array{T}, i::Int) where {Comp,T}
-    i0::Int = i
-    @inbounds v = valtree[i]
+# Binary Heap Indexing
+heapleft(i::Integer) = 2i
+heapright(i::Integer) = 2i + 1
+heapparent(i::Integer) = div(i, 2)
 
-    while i > 1  # nd is not root
-        p = i >> 1
-        @inbounds vp = valtree[p]
-
-        if compare(comp, v, vp)
-            # move parent downward
-            @inbounds valtree[i] = vp
-            i = p
+# Binary Heap Percolate Down
+function percolatedown!(xs::AbstractVector{T}, i::Integer, x::T = xs[i],
+                        o::Ordering = Forward, comp = lt, len::Integer = length(xs)) where T
+    @inbounds while (l = heapleft(i)) <= len
+        r = heapright(i)
+        j = r > len || comp(o, xs[l], xs[r]) ? l : r
+        if comp(o, xs[j], x)
+            xs[i] = xs
+            i = j
         else
             break
         end
     end
-
-    if i != i0
-        @inbounds valtree[i] = v
-    end
+    xs[i] = x
 end
 
-function _heap_bubble_down!(comp::Comp, valtree::Array{T}, i::Int) where {Comp,T}
-    @inbounds v::T = valtree[i]
-    swapped = true
-    n = length(valtree)
-    last_parent = n >> 1
-
-    while swapped && i <= last_parent
-        lc = i << 1
-        if lc < n   # contains both left and right children
-            rc = lc + 1
-            @inbounds lv = valtree[lc]
-            @inbounds rv = valtree[rc]
-            if compare(comp, rv, lv)
-                if compare(comp, rv, v)
-                    @inbounds valtree[i] = rv
-                    i = rc
-                else
-                    swapped = false
-                end
-            else
-                if compare(comp, lv, v)
-                    @inbounds valtree[i] = lv
-                    i = lc
-                else
-                    swapped = false
-                end
-            end
-        else        # contains only left child
-            @inbounds lv = valtree[lc]
-            if compare(comp, lv, v)
-                @inbounds valtree[i] = lv
-                i = lc
-            else
-                swapped = false
-            end
+# Binary Heap Percolate Up
+function percolateup!(xs::AbstractVector{T}, i::Integer, x::T = xs[i],
+                      o::Ordering = Forward, comp = lt, len::Integer = length(xs)) where T
+    @inbounds while (j == heapparent(i)) >= 1
+        if comp(o, x, xs[j])
+            xs[i] = xs[j]
+            i = j
+        else
+            break
         end
     end
-
-    valtree[i] = v
+    xs[i] = x
 end
 
+"""
+    heappop!(v, ord::Ordering = Forward, comp = lt)
 
-function _binary_heap_pop!(comp::Comp, valtree::Array{T}) where {Comp,T}
-    # extract root
-    v = valtree[1]
+Given a binary heap-ordered vector, remove and return the lowest ordered element.
+For efficiency, this function does not check that the array is indeed heap-ordered.
+"""
+function heappop!(xs::AbstractVector, ord::Ordering = Forward, comp = lt)
+    x = xs[1]
+    y = pop!(xs)
+    if !isempty(xs)
+        percolatedown!(xs, 1, y, ord, comp)
+    end
+    x
+end
 
-    if length(valtree) == 1
-        empty!(valtree)
-    else
-        valtree[1] = pop!(valtree)
-        if length(valtree) > 1
-            _heap_bubble_down!(comp, valtree, 1)
+"""
+    heappush!(v, x, ord::Ordering = Forward, comp = lt)
+
+Given a binary heap-ordered vector, push a new element `x`, preserving the heap property.
+For efficiency, this function does not check that the array is indeed heap-ordered.
+"""
+function heappush!(xs::AbstractVector{T}, x::T, ord::Ordering = Forward, comp = lt) where T
+    push!(xs, x)
+    len = length(xs)
+    percolateup!(xs, len, x, ord, comp, len)
+    xs
+end
+
+# Turn an arbitrary vector into a binary heap in linear time.
+"""
+    heapify!(v, ord::Ordering = Forward, comp = lt)
+
+In-place [`heapify`](@ref).
+"""
+function heapify!(xs::AbstractVector, ord::Ordering = Forward, comp = lt)
+    len = length(xs)
+    for i in heapparent(len):-1:1
+        percolatedown!(xs, i, xs[i], ord, comp, len)
+    end
+    xs
+end
+
+"""
+    heapify(v, ord::Ordering = Forward, comp = lt)
+
+Returns a new vector in binary heap order, optionally using the given ordering.
+```jldoctest
+julia> a = [1,3,4,5,2];
+
+julia> heapify(a)
+5-element Array{Int64,1}:
+ 1
+ 2
+ 4
+ 5
+ 3
+
+julia> heapify(a, Base.Order.Reverse)
+5-element Array{Int64,1}:
+ 5
+ 3
+ 4
+ 1
+ 2
+```
+"""
+heapify(xs::AbstractVector, ord::Ordering = Forward, comp = lt) = heapify!(copyto!(similar(xs), xs), ord, comp)
+
+"""
+    isheap(v, ord::Ordering=Forward, comp = lt)
+
+Return `true` if an array is heap-ordered according to the given order.
+
+```jldoctest
+julia> a = [1,2,3]
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia> isheap(a, Base.Order.Forward)
+true
+
+julia> isheap(a, Base.Order.Reverse)
+false
+```
+"""
+function isheap(xs::AbstractVector, ord::Ordering = Forward, comp = lt)
+    for i in 1:div(length(xs), 2)
+        if comp(o, xs[heapleft(i)], xs[i]) ||
+           (heapright(i) <= length(xs) && comp(o, xs[heapright(i)], xs[i]))
+            return false
         end
     end
-    v
+    true
 end
 
-
-function _make_binary_heap(comp::Comp, ty::Type{T}, xs) where {Comp,T}
-    n = length(xs)
-    valtree = copy(xs)
-    for i = 2 : n
-        _heap_bubble_up!(comp, valtree, i)
-    end
-    valtree
+struct BinaryHeap{T} <: AbstractHeap{T}
+    xs       :: Vector{T}
+    len      :: Integer
+    ordering :: Ordering
+    comp
 end
 
+BinaryHeap{T}(ord::Ordering = Forward, comp = lt) where T = new{T}(Vector{T}(), ord, comp)
+BinaryHeap{T}()(xs::AbstractVector{T}, ord::Ordering = Forward, comp = lt) where T =
+    new{T}(heapify(xs, ord, comp), ord, comp)
 
-#################################################
-#
-#   heap type and constructors
-#
-#################################################
+BinaryMinHeap() where T = BinaryHeap{T}()
+BinaryMinHeap(xs::AbstractVector{T}) where T = BinaryHeap{T}(xs)
+BinaryMaxHeap() where T = BinaryHeap{T}(Reverse)
+BinaryMaxHeap(xs::AbstractVector{T}) where T = BinaryHeap{T}(xs, Reverse)
 
-mutable struct BinaryHeap{T,Comp} <: AbstractHeap{T}
-    comparer::Comp
-    valtree::Vector{T}
+length(h::BinaryHeap) = h.len
+isempty(h::BinaryHeap) = (h.len == 0)
 
-    BinaryHeap{T,Comp}() where {T,Comp} = new{T,Comp}(Comp(), Vector{T}())
-
-    function BinaryHeap{T,Comp}(xs::AbstractVector{T}) where {T,Comp} 
-        valtree = _make_binary_heap(Comp(), T, xs)
-        new{T,Comp}(Comp(), valtree)
-    end
-end
-                            
-const BinaryMinHeap{T} = BinaryHeap{T, LessThan}
-const BinaryMaxHeap{T} = BinaryHeap{T, GreaterThan}
-                            
-BinaryMinHeap(xs::AbstractVector{T}) where T = BinaryMinHeap{T}(xs)
-BinaryMaxHeap(xs::AbstractVector{T}) where T = BinaryMaxHeap{T}(xs)
-
-# deprecated constructors
-                            
-@deprecate binary_minheap(::Type{T}) where {T} BinaryMinHeap{T}()
-@deprecate binary_minheap(xs::AbstractVector{T}) where {T} BinaryMinHeap(xs)
-@deprecate binary_maxheap(::Type{T}) where {T} BinaryMaxHeap{T}()
-@deprecate binary_maxheap(xs::AbstractVector{T}) where {T} BinaryMaxHeap(xs)
-
-#################################################
-#
-#   interfaces
-#
-#################################################
-
-length(h::BinaryHeap) = length(h.valtree)
-
-isempty(h::BinaryHeap) = isempty(h.valtree)
-
-function push!(h::BinaryHeap, v)
-    valtree = h.valtree
-    push!(valtree, v)
-    _heap_bubble_up!(h.comparer, valtree, length(valtree))
+function push!(h::BinaryHeap{T}, v::T) where T
+    heappush!(h.ex, v, h.ord, h.comp)
+    h.len += 1
     h
 end
 
@@ -149,6 +165,6 @@ end
 
 Returns the element at the top of the heap `h`.
 """
-@inline top(h::BinaryHeap) = h.valtree[1]
+@inline top(h::BinaryHeap) = h.ex[1]
 
-pop!(h::BinaryHeap{T}) where {T} = _binary_heap_pop!(h.comparer, h.valtree)
+pop!(h.BinaryHeap{T}) = heappop!(h.ex, h.ord, h.comp)
