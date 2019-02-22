@@ -1,9 +1,6 @@
 # This contains code that was formerly a part of Julia. License is MIT: http://julialang.org/license
 # Binary Heaps (using Flat Vectors)
 
-import Base.Order: Forward, Reverse, Ordering, lt
-import Base.length, Base.pop!
-
 # Binary Heap Indexing
 heapleft(i::Integer) = 2i
 heapright(i::Integer) = 2i + 1
@@ -28,7 +25,7 @@ end
 # Binary Heap Percolate Up
 function percolateup!(xs::AbstractVector{T}, i::Integer, x::T = xs[i],
                       o::Ordering = Forward, comp = lt, len::Integer = length(xs)) where T
-    @inbounds while (j == heapparent(i)) >= 1
+    @inbounds while (j = heapparent(i)) >= 1
         if comp(o, x, xs[j])
             xs[i] = xs[j]
             i = j
@@ -128,8 +125,8 @@ false
 """
 function isheap(xs::AbstractVector, ord::Ordering = Forward, comp = lt)
     for i in 1:div(length(xs), 2)
-        if comp(o, xs[heapleft(i)], xs[i]) ||
-           (heapright(i) <= length(xs) && comp(o, xs[heapright(i)], xs[i]))
+        if comp(ord, xs[heapleft(i)], xs[i]) ||
+           (heapright(i) <= length(xs) && comp(ord, xs[heapright(i)], xs[i]))
             return false
         end
     end
@@ -138,18 +135,17 @@ end
 
 struct BinaryHeap{T} <: AbstractHeap{T}
     xs       :: Vector{T}
-    len      :: Integer
     ord      :: Ordering
     comp
+
+    BinaryHeap(xs::AbstractVector{T}, ord::Ordering = Forward, comp = lt) where T =
+        new{T}(heapify(xs, ord, comp), ord, comp)
 end
 
-BinaryHeap(xs::AbstractVector{T}, ord::Ordering = Forward, comp = lt) where T =
-    BinaryHeap(heapify(xs, ord, comp), length(xs), ord, comp)
 BinaryHeap{T}(ord::Ordering = Forward, comp = lt) where T =
-    BinaryHeap(Vector{T}(), 0, ord, comp)
-
-BinaryMinHeap(xs::AbstractVector{T}) where T = BinaryHeap(xs, Forward ,lt)
-BinaryMaxHeap(xs::AbstractVector{T}) where T = BinaryHeap(xs, Reverse, lt)
+    BinaryHeap(Vector{T}(), ord, comp)
+BinaryMinHeap(xs::AbstractVector{T}) where T = BinaryHeap(xs, Forward)
+BinaryMaxHeap(xs::AbstractVector{T}) where T = BinaryHeap(xs, Reverse)
 BinaryMinHeap(::Type{T}) where T = BinaryMinHeap(Vector{T}())
 BinaryMaxHeap(::Type{T}) where T = BinaryMaxHeap(Vector{T}())
 
@@ -158,23 +154,22 @@ BinaryMaxHeap(::Type{T}) where T = BinaryMaxHeap(Vector{T}())
 
 Returns the number of elements in `h`. Takes constant time.
 """
-length(h::BinaryHeap) = h.len
+@inline length(h::BinaryHeap) = length(h.xs)
 
 """
     isempty(h::BinaryHeap)
 
 Returns `true` if `h` is empty, `false` otherwise. Takes constant time.
 """
-isempty(h::BinaryHeap) = (h.len == 0)
+@inline isempty(h::BinaryHeap) = (length(h.xs) == 0)
 
 """
-    push!(h::BinaryHeap{T}, v::T)
+    push!(h::BinaryHeap, v)
 
 Inserts the element `v` into `h`, maintaining the heap order.
 """
-function push!(h::BinaryHeap{T}, v::T) where T
-    heappush!(h.xs, v, h.ord, h.comp)
-    h.len += 1
+function push!(h::BinaryHeap{T}, v) where T
+    heappush!(h.xs, T(v), h.ord, h.comp)
     h
 end
 
@@ -183,11 +178,17 @@ end
 
 Returns the element at the top of the heap `h`. Takes constant time.
 """
-@inline top(h::BinaryHeap) = h.xs[1]
+function top(h::BinaryHeap)
+    isempty(h) && error("Accessing element of empty heap.")
+    h.xs[1]
+end
 
 """
     pop!(h::BinaryHeap)
 
 Removes and returns the element at the top of the heap `h`.
 """
-pop!(h::BinaryHeap) = heappop!(h.xs, h.ord, h.comp)
+function pop!(h::BinaryHeap)
+    isempty(h) && error("Removing element from empty heap.")
+    heappop!(h.xs, h.ord, h.comp)
+end

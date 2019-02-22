@@ -1,4 +1,8 @@
-# Various heap implementation
+# Various heap implementations
+
+import Base.Order: Forward, Reverse, Ordering, lt,
+                   ForwardOrdering, ReverseOrdering
+import Base: length, pop!, push!, isempty
 
 ###########################################################
 #
@@ -22,7 +26,7 @@
 #
 #   - push!(h, v)         add a value to the heap
 #
-#   - sizehint!(h)         set size hint to a heap
+#   - sizehint!(h)        set size hint to a heap
 #
 #   - top(h)              return the top value of a heap
 #
@@ -47,26 +51,13 @@
 # VT: value type
 
 abstract type AbstractHeap{VT} end
-
 abstract type AbstractMutableHeap{VT,HT} <: AbstractHeap{VT} end
-
 abstract type AbstractMinMaxHeap{VT} <: AbstractHeap{VT} end
-
-# comparer
-
-struct LessThan
-end
-
-struct GreaterThan
-end
-
-compare(c::LessThan, x, y) = x < y
-compare(c::GreaterThan, x, y) = x > y
 
 # heap implementations
 
 include("heaps/binary_heap.jl")
-include("heaps/mutable_binary_heap.jl")
+# include("heaps/mutable_binary_heap.jl")
 include("heaps/minmax_heap.jl")
 
 # generic functions
@@ -89,31 +80,25 @@ function extract_all_rev!(h::AbstractHeap{VT}) where VT
     r
 end
 
-# Array functions using heaps
+# Array functions using Binary Heap
 
-function nextreme(comp::Comp, n::Int, arr::AbstractVector{T}) where {T, Comp}
-    if n <= 0
-        return T[] # sort(arr)[1:n] returns [] for n <= 0
-    elseif n >= length(arr)
-        return sort(arr, lt = (x, y) -> compare(comp, y, x))
+function nextreme(n::Int, arr::AbstractVector{T}, ord::Ordering = Forward, comp = lt) where T
+    n <= 0 && return T[] # sort(arr)[1:n] returns [] for n <= 0
+    n >= length(arr) && return sort(arr, order = ord, lt = (x,y)->comp(ord,y,x))
+
+    buffer = BinaryHeap(T[], ord, comp)
+    for i in 1:n
+        @inbounds push!(buffer, arr[i])
     end
 
-    buffer = BinaryHeap{T,Comp}()
-
-    for i = 1 : n
-        @inbounds xi = arr[i]
-        push!(buffer, xi)
-    end
-
-    for i = n + 1 : length(arr)
-        @inbounds xi = arr[i]
-        if compare(comp, top(buffer), xi)
+    for i in n+1:length(arr)
+        @inbounds next = arr[i]
+        if comp(ord, top(buffer), next)
             # This could use a pushpop method
             pop!(buffer)
-            push!(buffer, xi)
+            push!(buffer, next)
         end
     end
-
     return extract_all_rev!(buffer)
 end
 
@@ -121,20 +106,15 @@ end
     nlargest(n, arr)
 
 Return the `n` largest elements of the array `arr`.
-
 Equivalent to `sort(arr, lt = >)[1:min(n, end)]`
 """
-function nlargest(n::Int, arr::AbstractVector{T}) where T
-    return nextreme(LessThan(), n, arr)
-end
+nlargest(n::Int, arr::AbstractVector{T}) where T = nextreme(n, arr, Forward)
+
 
 """
     nsmallest(n, arr)
 
 Return the `n` smallest elements of the array `arr`.
-
 Equivalent to `sort(arr, lt = <)[1:min(n, end)]`
 """
-function nsmallest(n::Int, arr::AbstractVector{T}) where T
-    return nextreme(GreaterThan(), n, arr)
-end
+nsmallest(n::Int, arr::AbstractVector{T}) where T = nextreme(n, arr, Reverse)

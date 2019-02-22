@@ -17,15 +17,15 @@ tests = ["int_set",
          "classified_collections",
          "disjoint_set",
          "binheap",
-         "mutable_binheap",
-         "minmax_heap",
+         #"mutable_binheap",
+         #"minmax_heap",
          "default_dict",
          "trie",
          "list",
          "multi_dict",
          "circular_buffer",
          "sorting",
-         "priority_queue"
+         #"priority_queue"
         ]
 
 if length(ARGS) > 0
