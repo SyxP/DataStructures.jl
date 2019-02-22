@@ -2,6 +2,7 @@
 # Binary Heaps (using Flat Vectors)
 
 import Base.Order: Forward, Reverse, Ordering, lt
+import Base.length, Base.pop!
 
 # Binary Heap Indexing
 heapleft(i::Integer) = 2i
@@ -15,7 +16,7 @@ function percolatedown!(xs::AbstractVector{T}, i::Integer, x::T = xs[i],
         r = heapright(i)
         j = r > len || comp(o, xs[l], xs[r]) ? l : r
         if comp(o, xs[j], x)
-            xs[i] = xs
+            xs[i] = xs[j]
             i = j
         else
             break
@@ -138,24 +139,41 @@ end
 struct BinaryHeap{T} <: AbstractHeap{T}
     xs       :: Vector{T}
     len      :: Integer
-    ordering :: Ordering
+    ord      :: Ordering
     comp
 end
 
-BinaryHeap{T}(ord::Ordering = Forward, comp = lt) where T = new{T}(Vector{T}(), ord, comp)
-BinaryHeap{T}()(xs::AbstractVector{T}, ord::Ordering = Forward, comp = lt) where T =
-    new{T}(heapify(xs, ord, comp), ord, comp)
+BinaryHeap(xs::AbstractVector{T}, ord::Ordering = Forward, comp = lt) where T =
+    BinaryHeap(heapify(xs, ord, comp), length(xs), ord, comp)
+BinaryHeap{T}(ord::Ordering = Forward, comp = lt) where T =
+    BinaryHeap(Vector{T}(), 0, ord, comp)
 
-BinaryMinHeap() where T = BinaryHeap{T}()
-BinaryMinHeap(xs::AbstractVector{T}) where T = BinaryHeap{T}(xs)
-BinaryMaxHeap() where T = BinaryHeap{T}(Reverse)
-BinaryMaxHeap(xs::AbstractVector{T}) where T = BinaryHeap{T}(xs, Reverse)
+BinaryMinHeap(xs::AbstractVector{T}) where T = BinaryHeap(xs, Forward ,lt)
+BinaryMaxHeap(xs::AbstractVector{T}) where T = BinaryHeap(xs, Reverse, lt)
+BinaryMinHeap(::Type{T}) where T = BinaryMinHeap(Vector{T}())
+BinaryMaxHeap(::Type{T}) where T = BinaryMaxHeap(Vector{T}())
 
+"""
+    length(h::BinaryHeap)
+
+Returns the number of elements in `h`. Takes constant time.
+"""
 length(h::BinaryHeap) = h.len
+
+"""
+    isempty(h::BinaryHeap)
+
+Returns `true` if `h` is empty, `false` otherwise. Takes constant time.
+"""
 isempty(h::BinaryHeap) = (h.len == 0)
 
+"""
+    push!(h::BinaryHeap{T}, v::T)
+
+Inserts the element `v` into `h`, maintaining the heap order.
+"""
 function push!(h::BinaryHeap{T}, v::T) where T
-    heappush!(h.ex, v, h.ord, h.comp)
+    heappush!(h.xs, v, h.ord, h.comp)
     h.len += 1
     h
 end
@@ -163,8 +181,13 @@ end
 """
     top(h::BinaryHeap)
 
-Returns the element at the top of the heap `h`.
+Returns the element at the top of the heap `h`. Takes constant time.
 """
-@inline top(h::BinaryHeap) = h.ex[1]
+@inline top(h::BinaryHeap) = h.xs[1]
 
-pop!(h.BinaryHeap{T}) = heappop!(h.ex, h.ord, h.comp)
+"""
+    pop!(h::BinaryHeap)
+
+Removes and returns the element at the top of the heap `h`.
+"""
+pop!(h::BinaryHeap) = heappop!(h.xs, h.ord, h.comp)
